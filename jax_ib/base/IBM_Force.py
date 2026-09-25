@@ -3,7 +3,7 @@ import jax
 from jax_ib.base import grids
 
 def integrate_trapz(integrand,dx,dy):
-    return jnp.trapz(jnp.trapz(integrand,dx=dx),dx=dy)
+    return jnp.trapezoid(jnp.trapezoid(integrand,dx=dx),dx=dy)
 
 
 def Integrate_Field_Fluid_Domain(field):
