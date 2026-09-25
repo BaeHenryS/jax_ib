@@ -103,7 +103,7 @@ def perm_vmap_multiple_particles(grid,particles,smoothening_fn,Know):
         R_theta =  calc_r(geometry_param,Grid_p)
         return calc_perm(grid,particle_center,R_theta,smoothening_fn,Know)
 
-      xs_flat, xs_tree = jax.tree_flatten(tree_arg)
+      xs_flat, xs_tree = jax.tree.flatten(tree_arg)
       #print(xs_flat)  
       return jax.vmap(foo)(xs_flat)
     X,Y = grid.mesh()
