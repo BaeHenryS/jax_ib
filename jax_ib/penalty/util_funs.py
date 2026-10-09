@@ -43,11 +43,12 @@ def project_particle(grid,circle_center,Rtheta,delta_approx_fn,offset=None):
     Rtheta_i = jnp.array(jnp.roll(Rtheta,-1))
 
 
-    theta_grid = jnp.arctan((Y-yc)/(X-xc))*jnp.heaviside(X-xc,1)*jnp.heaviside(Y-yc,0) # first quadrant
-
-    theta_grid = theta_grid + (jnp.arctan((Y-yc)/(X-xc))+jnp.pi )*jnp.heaviside(xc-X,1) # second and third quadrant
-
-    theta_grid = theta_grid + (jnp.arctan((Y-yc)/(X-xc))+ 2*jnp.pi)*jnp.heaviside(X-xc,0)*jnp.heaviside(yc-Y,0)  # second quadrant
+    # Polar angle in [0, 2*pi). arctan2 is right on the axes through the
+    # centre, where the old quotient-and-quadrant form gave 2*pi above it,
+    # pi/2 below it and NaN (0/0) at the centre. The centre itself gets
+    # theta = 0; the where() also keeps the gradient finite there.
+    at_center = (X == xc) & (Y == yc)
+    theta_grid = jnp.mod(jnp.arctan2(Y-yc, jnp.where(at_center, 1.0, X-xc)), 2*jnp.pi)
 
     dtheta = 2*jnp.pi/(ntheta-1)
     #print(dtheta)
