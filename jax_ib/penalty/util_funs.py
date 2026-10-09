@@ -8,7 +8,12 @@ def arbitrary_obstacle(pressure_gradient,permeability):
   def forcing(v):
 
     #permeability = calc_perm(v)
-    force_vector = (permeability, permeability)
+    # One penalty field per velocity component (each sampled at that
+    # component's faces); a single field or scalar applies to every component.
+    if isinstance(permeability, (tuple, list)):
+      force_vector = tuple(permeability)
+    else:
+      force_vector = (permeability,) * len(v)
     px = pressure_gradient
     return tuple(ib.grids.GridArray(pxn* jnp.ones_like(u.data)-f * u.data, u.offset, u.grid)
                  for pxn,f, u in zip(px,force_vector, v))        
@@ -23,9 +28,12 @@ def delta_approx_tanh(rf2,r2):
     
     return approx/np.max(approx)
 
-def project_particle(grid,circle_center,Rtheta,delta_approx_fn):
+def project_particle(grid,circle_center,Rtheta,delta_approx_fn,offset=None):
+    # offset: where to sample, e.g. grid.cell_faces[i] for velocity component i.
+    if offset is None:
+        offset = grid.cell_center
     xc,yc = circle_center
-    X, Y = grid.mesh(grid.cell_center)
+    X, Y = grid.mesh(offset)
     
     
     ntheta = Rtheta.size
@@ -69,14 +77,17 @@ def project_particle(grid,circle_center,Rtheta,delta_approx_fn):
     ny = (Rfinal*jnp.sin(theta_grid)-drdtheta*jnp.cos(theta_grid))
     length = jnp.sqrt(nx**2 + ny**2)
     
-    normal_v = (ib.grids.GridArray(nx/length*delta_approx,grid.cell_center,grid), ib.grids.GridArray(ny/length*delta_approx,grid.cell_center,grid))
+    normal_v = (ib.grids.GridArray(nx/length*delta_approx,offset,grid), ib.grids.GridArray(ny/length*delta_approx,offset,grid))
     return normal_v,Rfinal
 
 
-def calc_perm(grid,circle_center,Rtheta,smoothening_fn,Know):
-    X,Y = grid.mesh(grid.cell_center)
+def calc_perm(grid,circle_center,Rtheta,smoothening_fn,Know,offset=None):
+    # offset: where to sample, e.g. grid.cell_faces[i] for velocity component i.
+    if offset is None:
+        offset = grid.cell_center
+    X,Y = grid.mesh(offset)
     delta_approx = lambda r: delta_approx_fn(r,grid)
-    normal_v,Rfinal = project_particle(grid,circle_center,Rtheta,delta_approx)
+    normal_v,Rfinal = project_particle(grid,circle_center,Rtheta,delta_approx,offset)
 
     del normal_v
     
@@ -92,7 +103,9 @@ def calc_perm(grid,circle_center,Rtheta,smoothening_fn,Know):
     #return inv_perm/2.0*(1.0 + jnp.tanh(G))
     #return inv_perm*jnp.heaviside(G,1.0)
 
-def perm_vmap_multiple_particles(grid,particles,smoothening_fn,Know):
+def perm_vmap_multiple_particles(grid,particles,smoothening_fn,Know,offset=None):
+    # offset: where to sample (default cell centres). A staggered solver needs
+    # one call per velocity component, at grid.cell_faces[i].
     
     def Vmap_calc_perm(grid,Grid_p,tree_arg):
       calc_r = tree_arg.shape 
@@ -101,7 +114,7 @@ def perm_vmap_multiple_particles(grid,particles,smoothening_fn,Know):
       def foo(tree_arg):
         (particle_center,geometry_param,_,_) = tree_arg
         R_theta =  calc_r(geometry_param,Grid_p)
-        return calc_perm(grid,particle_center,R_theta,smoothening_fn,Know)
+        return calc_perm(grid,particle_center,R_theta,smoothening_fn,Know,offset)
 
       xs_flat, xs_tree = jax.tree_flatten(tree_arg)
       #print(xs_flat)  
